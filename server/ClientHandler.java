@@ -41,6 +41,7 @@ public class ClientHandler implements Runnable {
         } catch (Exception e) {
             // Handle disconnect
             System.out.println("[DISCONNECT] " + username + " keluar.");
+            System.out.println("MANUSIA");
             ServerMain.listClients.remove(username);
         }
     }
