@@ -29,5 +29,6 @@ public class ServerMain {
         }
 
         System.out.println("halo");
+        System.out.println("");
     }
 }
