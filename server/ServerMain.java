@@ -6,7 +6,7 @@ import java.util.HashMap;
 
 public class ServerMain {
     private static final int PORT = 50125;
-    
+
     // Hashmap untuk menyimpan User yang Online (Kunci Routing!)
     public static HashMap<String, ClientHandler> listClients = new HashMap<>();
 
@@ -30,6 +30,5 @@ public class ServerMain {
 
         System.out.println("halo");
         System.out.println("");
-        System.out.println("test");
     }
 }
