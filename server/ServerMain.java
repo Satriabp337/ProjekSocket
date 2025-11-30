@@ -27,5 +27,7 @@ public class ServerMain {
         } catch (Exception e) {
             e.printStackTrace();
         }
+
+        System.out.println("halo");
     }
 }
