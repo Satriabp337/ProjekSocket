@@ -79,5 +79,6 @@ public class ClientMain extends JFrame {
     public static void main(String[] args) {
         // Menjalankan di Thread GUI
         SwingUtilities.invokeLater(() -> new ClientMain());
+        System.out.println();
     }
 }
