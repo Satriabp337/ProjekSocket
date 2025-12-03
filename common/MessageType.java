@@ -1,8 +1,18 @@
 package common;
 
-public enum MessageType {
-    LOGIN,  // Saat user baru masuk
-    TEXT,   // Chat biasa
-    FILE,   // Kirim file
-    BUZZ    // Fitur getar
+import java.io.Serializable;
+
+public enum MessageType implements Serializable {
+    // Tipe dasar untuk koneksi dan pesan
+    LOGIN,
+    LOGOUT,
+    TEXT,
+    FILE,
+    BUZZ,
+
+    // Tipe untuk transfer file
+    FILE_TRANSFER_START,
+    FILE_TRANSFER_DATA,
+    FILE_TRANSFER_COMPLETE,
+    FILE_TRANSFER_ERROR
 }
