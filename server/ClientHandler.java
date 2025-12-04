@@ -2,6 +2,7 @@ package server;
 
 import common.Message;
 import common.MessageType;
+import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
@@ -25,23 +26,70 @@ public class ClientHandler implements Runnable {
 
             // Loop membaca pesan dari client
             while (socket.isConnected()) {
-                Message msg = (Message) in.readObject(); // BACA PESAN
+                Message msg = (Message) in.readObject();
 
-                // --- LOGIKA UTAMA SATRIA DISINI ---
-                if (msg.getType() == MessageType.LOGIN) {
-                    this.username = msg.getSender();
-                    ServerMain.listClients.put(this.username, this);
-                    System.out.println("[LOGIN] User terdaftar: " + username);
-                } 
-                else if (msg.getType() == MessageType.TEXT) {
-                    System.out.println("[CHAT] " + msg.getSender() + ": " + msg.getContent());
-                    // TODO: Satria harus bikin kode broadcast disini nanti
+                switch (msg.getType()) {
+                    case LOGIN:
+                        this.username = msg.getSender();
+                        ServerController.addUser(this.username, this);
+                        break;
+
+                    case TEXT:
+                        String tujuan = msg.getRecipient();
+
+                        if (tujuan.equals("ALL")) {
+                            System.out.println("[CHAT] " + msg.getSender() + ": " + msg.getContent());
+                            ServerController.broadcastMessage(msg.getSender(), msg.getContent());
+                        } else {
+                            System.out.println("[CHAT PRIV]" + msg.getSender() + " --> " + tujuan);
+                            ServerController.sendPrivateMessage(msg.getSender(), tujuan, msg.getContent());
+                        }
+                        break;
+
+                    case FILE:
+                        String target = msg.getRecipient();
+                        String fName = msg.getFileName();
+                        byte[] fData = msg.getFileData();
+
+                        if(target.equals("ALL")) {
+                            ServerController.broadcastFile(this.username, fName, fData);
+                        } else {
+                            ServerController.sendPrivateFile(this.username, target, fName, fData);
+                        }
+                        
+                    default:
+                        break;
                 }
             }
         } catch (Exception e) {
-            // Handle disconnect
-            System.out.println("[DISCONNECT] " + username + " keluar.");
-            ServerMain.listClients.remove(username);
+            closeConnection();
+        }
+    }
+
+    public String getUsername() {
+        return this.username;
+    }
+
+    public void sendMessage(Message msg) {
+        try {
+            out.writeObject(msg);
+            out.flush();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void closeConnection() {
+        if (username != null) {
+            ServerController.removeUser(username);
+        }
+
+        try {
+            socket.close();
+            in.close();
+            out.close();
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 }
