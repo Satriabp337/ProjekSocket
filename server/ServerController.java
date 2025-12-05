@@ -50,19 +50,23 @@ public class ServerController {
         }
     }
 
-    public static synchronized void broadcastFile (String senderName, String fileName, byte[] data) {
-        Message msg = new Message(MessageType.FILE_REQUEST);
-        msg.setSender(senderName);
-        msg.setRecipient("ALL");
-        msg.setFileName(fileName);
-        msg.setFileChunk(data);
+    public static synchronized void relayFilePacket (Message msg) {
+        String target = msg.getRecipient();
 
-        for(ClientHandler client : onlineUsers.values()) {
-            if(!client.getUsername().equals(senderName)) {
-                client.sendMessage(msg);
+        if (target.equals("ALL")) {
+            for (ClientHandler client : onlineUsers.values()) {
+                if(!client.getUsername().equals(msg.getSender())) {
+                    client.sendMessage(msg);
+                }
+            }
+        } else {
+            ClientHandler targetClient = onlineUsers.get(target);
+            if(targetClient != null) {
+                targetClient.sendMessage(msg);
+            } else {
+                //
             }
         }
-        System.out.println("[FILE ALL] " + senderName + " broadcast file '" + fileName + "'");
     }
 
     public static synchronized void sendPrivateFile(String senderName, String recipientName, String fileName, byte[] data) {

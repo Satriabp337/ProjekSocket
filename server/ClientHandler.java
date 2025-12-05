@@ -27,12 +27,12 @@ public class ClientHandler implements Runnable {
             // Loop membaca pesan dari client
             while (socket.isConnected()) {
                 // [BLOCKING I/O] Thread diam disini sampai ada pesan masuk
-                Message msg = (Message) in.readObject(); 
+                Message msg = (Message) in.readObject();
 
                 // --- ROUTING LOGIC BARU (Sesuai Protokol Novran) ---
                 switch (msg.getType()) {
-                    
-                    // 1. LOGIN diganti jadi CONNECT
+
+                    // 1. CONNECT
                     case CONNECT:
                         this.username = msg.getSender();
                         ServerController.addUser(this.username, this);
@@ -41,6 +41,10 @@ public class ClientHandler implements Runnable {
                     // 2. DISCONNECT (User Keluar)
                     case DISCONNECT:
                         closeConnection();
+                        break;
+
+                    case USER_LIST_UPDATE:
+
                         break;
 
                     // 3. BROADCAST CHAT (Langsung panggil broadcast)
@@ -55,19 +59,28 @@ public class ClientHandler implements Runnable {
                         System.out.println("[CHAT PRIV] " + msg.getSender() + " -> " + targetUser);
                         ServerController.sendPrivateMessage(msg.getSender(), targetUser, msg.getContent());
                         break;
-                        
+
                     // 5. FILE REQUEST (Header File / Pengiriman File Simple)
                     case FILE_REQUEST:
-                        String target = msg.getRecipient();
-                        String fName = msg.getFileName();
-                        byte[] fData = msg.getFileChunk(); 
-                        
-                        // Logika Routing File
-                        if (target.equals("ALL")) {
-                            ServerController.broadcastFile(this.username, fName, fData);
-                        } else {
-                            ServerController.sendPrivateFile(this.username, target, fName, fData);
-                        }
+                        System.out.println("[FILE START] " + msg.getSender() + " sending '" + msg.getContent() + "' to "
+                                + msg.getRecipient());
+                        ServerController.relayFilePacket(msg);
+                        break;
+
+                    // Isi: Potongan File (Chunk)
+                    case FILE_CHUNK:
+                        ServerController.relayFilePacket(msg);
+                        break;
+
+                    // Footer: Selesai
+                    case FILE_COMPLETE:
+                        System.out.println("[FILE DONE] Transfer " + msg.getContent() + " finished.");
+                        ServerController.relayFilePacket(msg);
+                        break;
+
+                    case FILE_REJECT:
+                        System.out.println(
+                                "[FILE REJECT] " + msg.getSender() + " rejected file from " + msg.getRecipient());
                         break;
 
                     // 6. BUZZ (Fitur Getar)
