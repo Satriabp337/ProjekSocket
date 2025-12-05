@@ -28,12 +28,12 @@ public class ClientHandler implements Runnable {
                 Message msg = (Message) in.readObject(); // BACA PESAN
 
                 // --- LOGIKA UTAMA SATRIA DISINI ---
-                if (msg.getType() == MessageType.LOGIN) {
+                if (msg.getType() == MessageType.CONNECT) {
                     this.username = msg.getSender();
                     ServerMain.listClients.put(this.username, this);
                     System.out.println("[LOGIN] User terdaftar: " + username);
                 } 
-                else if (msg.getType() == MessageType.TEXT) {
+                else if (msg.getType() == MessageType.BROADCAST_CHAT) {
                     System.out.println("[CHAT] " + msg.getSender() + ": " + msg.getContent());
                     // TODO: Satria harus bikin kode broadcast disini nanti
                 }
