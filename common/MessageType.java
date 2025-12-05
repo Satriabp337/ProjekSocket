@@ -1,7 +1,5 @@
 package common;
 
-//import java.io.Serializable;
-
 public enum MessageType {
     
     // 1. Tipe Koneksi & Status
