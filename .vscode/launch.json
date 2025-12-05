@@ -6,6 +6,20 @@
     "configurations": [
         {
             "type": "java",
+            "name": "ClientMain",
+            "request": "launch",
+            "mainClass": "client.ClientMain",
+            "projectName": "ProjekSocket_af408113"
+        },
+        {
+            "type": "java",
+            "name": "ServerMain",
+            "request": "launch",
+            "mainClass": "server.ServerMain",
+            "projectName": "ProjekSocket_af408113"
+        },
+        {
+            "type": "java",
             "name": "ServerMain",
             "request": "launch",
             "mainClass": "server.ServerMain",

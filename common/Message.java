@@ -3,26 +3,27 @@ package common;
 import java.io.Serializable;
 
 public class Message implements Serializable {
-    // ID unik untuk memastikan kompatibilitas serialisasi (JANGAN DIUBAH)
-    private static final long serialVersionUID = 1L; 
+    private static final long serialVersionUID = 1L;
 
     private MessageType type;
     private String sender;
-    private String recipient; // Biasanya "ALL" atau nama user tujuan
-    private String content; // Digunakan untuk teks pesan, nama file, atau pesan status
+    private String recipient; // "ALL" atau nama user tujuan
+    private String content; // Isi pesan teks
 
-    // --- FIELD BARU UNTUK FILE TRANSFER ---
-    private long fileSize;        // Ukuran total file (hanya diisi pada FILE_REQUEST)
-    private byte[] fileChunk;     // Potongan data biner dari file (hanya diisi pada FILE_CHUNK)
-    // ------------------------------------
+    // --- FIELD KHUSUS FILE TRANSFER (GABUNGAN SATRIA & NOVRAN) ---
+    // Kita tetap butuh fileName yang eksplisit biar server Satria ga bingung
+    private String fileName;
+
+    // Kita butuh fitur chunking Novran biar bisa kirim file besar
+    private long fileSize; // Ukuran total file
+    private byte[] fileChunk; // Potongan data (Ganti nama fileData jadi fileChunk biar sesuai protokol)
 
     // Konstruktor utama
     public Message(MessageType type) {
         this.type = type;
     }
 
-    // --- Getter dan Setter ---
-
+    // --- GETTER & SETTER LENGKAP ---
     public MessageType getType() {
         return type;
     }
@@ -54,7 +55,15 @@ public class Message implements Serializable {
     public void setContent(String content) {
         this.content = content;
     }
-    
+
+    public String getFileName() {
+        return fileName;
+    }
+
+    public void setFileName(String fileName) {
+        this.fileName = fileName;
+    }
+
     public long getFileSize() {
         return fileSize;
     }

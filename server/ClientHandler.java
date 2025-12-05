@@ -2,6 +2,7 @@ package server;
 
 import common.Message;
 import common.MessageType;
+import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
@@ -25,24 +26,108 @@ public class ClientHandler implements Runnable {
 
             // Loop membaca pesan dari client
             while (socket.isConnected()) {
-                Message msg = (Message) in.readObject(); // BACA PESAN
+                // [BLOCKING I/O] Thread diam disini sampai ada pesan masuk
+                Message msg = (Message) in.readObject();
 
-                // --- LOGIKA UTAMA SATRIA DISINI ---
-                if (msg.getType() == MessageType.CONNECT) {
-                    this.username = msg.getSender();
-                    ServerMain.listClients.put(this.username, this);
-                    System.out.println("[LOGIN] User terdaftar: " + username);
-                } 
-                else if (msg.getType() == MessageType.BROADCAST_CHAT) {
-                    System.out.println("[CHAT] " + msg.getSender() + ": " + msg.getContent());
-                    // TODO: Satria harus bikin kode broadcast disini nanti
+                // --- ROUTING LOGIC BARU (Sesuai Protokol Novran) ---
+                switch (msg.getType()) {
+
+                    // 1. CONNECT
+                    case CONNECT:
+                        this.username = msg.getSender();
+                        ServerController.addUser(this.username, this);
+                        break;
+
+                    // 2. DISCONNECT (User Keluar)
+                    case DISCONNECT:
+                        closeConnection();
+                        break;
+
+                    case USER_LIST_UPDATE:
+
+                        break;
+
+                    // 3. BROADCAST CHAT (Langsung panggil broadcast)
+                    case BROADCAST_CHAT:
+                        System.out.println("[CHAT ALL] " + msg.getSender() + ": " + msg.getContent());
+                        ServerController.broadcastMessage(msg.getSender(), msg.getContent());
+                        break;
+
+                    // 4. PRIVATE CHAT (Langsung panggil private)
+                    case PRIVATE_CHAT:
+                        String targetUser = msg.getRecipient();
+                        System.out.println("[CHAT PRIV] " + msg.getSender() + " -> " + targetUser);
+                        ServerController.sendPrivateMessage(msg.getSender(), targetUser, msg.getContent());
+                        break;
+
+                    // 5. FILE REQUEST (Header File / Pengiriman File Simple)
+                    case FILE_REQUEST:
+                        System.out.println("[FILE START] " + msg.getSender() + " sending '" + msg.getContent() + "' to "
+                                + msg.getRecipient());
+                        ServerController.relayFilePacket(msg);
+                        break;
+
+                    // Isi: Potongan File (Chunk)
+                    case FILE_CHUNK:
+                        ServerController.relayFilePacket(msg);
+                        break;
+
+                    // Footer: Selesai
+                    case FILE_COMPLETE:
+                        System.out.println("[FILE DONE] Transfer " + msg.getContent() + " finished.");
+                        ServerController.relayFilePacket(msg);
+                        break;
+
+                    case FILE_REJECT:
+                        System.out.println(
+                                "[FILE REJECT] " + msg.getSender() + " rejected file from " + msg.getRecipient());
+                        break;
+
+                    // 6. BUZZ (Fitur Getar)
+                    case BUZZ:
+                        // Server hanya meneruskan (Forwarding) signal Buzz
+                        // Kalau targetnya ALL -> Broadcast
+                        // Kalau targetnya Nama -> Private
+                        String buzzTarget = msg.getRecipient();
+                        if ("ALL".equals(buzzTarget)) {
+                            // Untuk saat ini kita pakai broadcastMessage dulu atau bikin method khusus
+                            // Kita pakai broadcastMessage dengan konten khusus "BUZZ"
+                            ServerController.broadcastMessage(msg.getSender(), "BUZZ");
+                        } else {
+                            ServerController.sendPrivateMessage(msg.getSender(), buzzTarget, "BUZZ");
+                        }
+                        break;
                 }
             }
         } catch (Exception e) {
-            // Handle disconnect
-            System.out.println("[DISCONNECT] " + username + " keluar.");
-            System.out.println("MANUSIA");
-            ServerMain.listClients.remove(username);
+            closeConnection();
+        }
+    }
+
+    public String getUsername() {
+        return this.username;
+    }
+
+    public void sendMessage(Message msg) {
+        try {
+            out.writeObject(msg);
+            out.flush();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void closeConnection() {
+        if (username != null) {
+            ServerController.removeUser(username);
+        }
+
+        try {
+            socket.close();
+            in.close();
+            out.close();
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 }
