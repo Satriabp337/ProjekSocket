@@ -24,7 +24,7 @@ public class ServerController {
     }
 
     public static synchronized void broadcastMessage(String senderName, String textContent) {
-        Message msg = new Message(MessageType.TEXT);
+        Message msg = new Message(MessageType.BROADCAST_CHAT);
         msg.setSender(senderName);
         msg.setContent(textContent);
         msg.setRecipient("ALL");
@@ -38,7 +38,7 @@ public class ServerController {
         ClientHandler targetClient = onlineUsers.get(recipientName);
 
         if (targetClient != null) {
-           Message msg = new Message(MessageType.TEXT);
+           Message msg = new Message(MessageType.PRIVATE_CHAT);
             msg.setSender(senderName);
             msg.setContent(textContent);
             msg.setRecipient(recipientName);  
@@ -51,11 +51,11 @@ public class ServerController {
     }
 
     public static synchronized void broadcastFile (String senderName, String fileName, byte[] data) {
-        Message msg = new Message(MessageType.FILE);
+        Message msg = new Message(MessageType.FILE_REQUEST);
         msg.setSender(senderName);
         msg.setRecipient("ALL");
         msg.setFileName(fileName);
-        msg.setFileData(data);
+        msg.setFileChunk(data);
 
         for(ClientHandler client : onlineUsers.values()) {
             if(!client.getUsername().equals(senderName)) {
@@ -69,11 +69,11 @@ public class ServerController {
         ClientHandler targetClient = onlineUsers.get(recipientName);
 
         if(targetClient != null) {
-            Message msg = new Message(MessageType.FILE);
+            Message msg = new Message(MessageType.FILE_REQUEST);
             msg.setSender(senderName);
             msg.setRecipient(recipientName);
             msg.setFileName(fileName);
-            msg.setFileData(data);
+            msg.setFileChunk(data);
 
             targetClient.sendMessage(msg);
             System.out.println("[FILE PRIV] " + senderName + " sent file '" + fileName + "' to " + recipientName);

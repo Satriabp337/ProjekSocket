@@ -26,38 +26,63 @@ public class ClientHandler implements Runnable {
 
             // Loop membaca pesan dari client
             while (socket.isConnected()) {
-                Message msg = (Message) in.readObject();
+                // [BLOCKING I/O] Thread diam disini sampai ada pesan masuk
+                Message msg = (Message) in.readObject(); 
 
+                // --- ROUTING LOGIC BARU (Sesuai Protokol Novran) ---
                 switch (msg.getType()) {
-                    case LOGIN:
+                    
+                    // 1. LOGIN diganti jadi CONNECT
+                    case CONNECT:
                         this.username = msg.getSender();
                         ServerController.addUser(this.username, this);
                         break;
 
-                    case TEXT:
-                        String tujuan = msg.getRecipient();
-
-                        if (tujuan.equals("ALL")) {
-                            System.out.println("[CHAT] " + msg.getSender() + ": " + msg.getContent());
-                            ServerController.broadcastMessage(msg.getSender(), msg.getContent());
-                        } else {
-                            System.out.println("[CHAT PRIV]" + msg.getSender() + " --> " + tujuan);
-                            ServerController.sendPrivateMessage(msg.getSender(), tujuan, msg.getContent());
-                        }
+                    // 2. DISCONNECT (User Keluar)
+                    case DISCONNECT:
+                        closeConnection();
                         break;
 
-                    case FILE:
+                    // 3. BROADCAST CHAT (Langsung panggil broadcast)
+                    case BROADCAST_CHAT:
+                        System.out.println("[CHAT ALL] " + msg.getSender() + ": " + msg.getContent());
+                        ServerController.broadcastMessage(msg.getSender(), msg.getContent());
+                        break;
+
+                    // 4. PRIVATE CHAT (Langsung panggil private)
+                    case PRIVATE_CHAT:
+                        String targetUser = msg.getRecipient();
+                        System.out.println("[CHAT PRIV] " + msg.getSender() + " -> " + targetUser);
+                        ServerController.sendPrivateMessage(msg.getSender(), targetUser, msg.getContent());
+                        break;
+                        
+                    // 5. FILE REQUEST (Header File / Pengiriman File Simple)
+                    case FILE_REQUEST:
                         String target = msg.getRecipient();
                         String fName = msg.getFileName();
-                        byte[] fData = msg.getFileData();
-
-                        if(target.equals("ALL")) {
+                        byte[] fData = msg.getFileChunk(); 
+                        
+                        // Logika Routing File
+                        if (target.equals("ALL")) {
                             ServerController.broadcastFile(this.username, fName, fData);
                         } else {
                             ServerController.sendPrivateFile(this.username, target, fName, fData);
                         }
-                        
-                    default:
+                        break;
+
+                    // 6. BUZZ (Fitur Getar)
+                    case BUZZ:
+                        // Server hanya meneruskan (Forwarding) signal Buzz
+                        // Kalau targetnya ALL -> Broadcast
+                        // Kalau targetnya Nama -> Private
+                        String buzzTarget = msg.getRecipient();
+                        if ("ALL".equals(buzzTarget)) {
+                            // Untuk saat ini kita pakai broadcastMessage dulu atau bikin method khusus
+                            // Kita pakai broadcastMessage dengan konten khusus "BUZZ"
+                            ServerController.broadcastMessage(msg.getSender(), "BUZZ");
+                        } else {
+                            ServerController.sendPrivateMessage(msg.getSender(), buzzTarget, "BUZZ");
+                        }
                         break;
                 }
             }
