@@ -8,15 +8,11 @@ public class Message implements Serializable {
     private MessageType type;
     private String sender;
     private String recipient; // "ALL" atau nama user tujuan
-    private String content; // Isi pesan teks
+    private String content; // Isi pesan teks (JUGA DIGUNAKAN UNTUK NAMA FILE PADA FILE_REQUEST)
 
-    // --- FIELD KHUSUS FILE TRANSFER (GABUNGAN SATRIA & NOVRAN) ---
-    // Kita tetap butuh fileName yang eksplisit biar server Satria ga bingung
-    private String fileName;
-
-    // Kita butuh fitur chunking Novran biar bisa kirim file besar
+    // --- FIELD KHUSUS FILE TRANSFER ---
     private long fileSize; // Ukuran total file
-    private byte[] fileChunk; // Potongan data (Ganti nama fileData jadi fileChunk biar sesuai protokol)
+    private byte[] fileChunk; // Potongan data
 
     // Konstruktor utama
     public Message(MessageType type) {
@@ -56,13 +52,7 @@ public class Message implements Serializable {
         this.content = content;
     }
 
-    public String getFileName() {
-        return fileName;
-    }
-
-    public void setFileName(String fileName) {
-        this.fileName = fileName;
-    }
+    // Hapus getFileName() dan setFileName()
 
     public long getFileSize() {
         return fileSize;

@@ -18,9 +18,9 @@ public class ClientMain extends JFrame {
     private JTextField inputField = new JTextField();
 
     // VARIABEL BARU
-    private JButton sendButton = new JButton("Kirim Pesan"); // Ubah nama tombol Kirim
-    private JButton buzzButton = new JButton("BUZZ"); // TOMBOL BARU
-    private JButton fileButton = new JButton("Kirim File"); // TOMBOL BARU
+    private JButton sendButton = new JButton("Kirim Pesan"); 
+    private JButton buzzButton = new JButton("BUZZ"); 
+    private JButton fileButton = new JButton("Kirim File"); 
 
     private JButton connectButton = new JButton("Connect");
     private JList<String> userList = new JList<>();
@@ -37,7 +37,6 @@ public class ClientMain extends JFrame {
         JPanel chatPanel = new JPanel(new BorderLayout());
         JPanel bottomPanel = new JPanel(new BorderLayout());
 
-        // PANEL BARU untuk menampung semua tombol aksi (Kirim, BUZZ, File)
         JPanel actionPanel = new JPanel(new GridLayout(1, 3));
 
         // Chat Area
@@ -52,13 +51,17 @@ public class ClientMain extends JFrame {
         actionPanel.add(buzzButton);
         actionPanel.add(fileButton);
 
-        bottomPanel.add(actionPanel, BorderLayout.EAST); // Ganti sendButton dengan actionPanel
+        bottomPanel.add(actionPanel, BorderLayout.EAST); 
 
         chatPanel.add(bottomPanel, BorderLayout.SOUTH);
 
         // User List (Kanan)
         userList.setModel(userListModel);
         userList.setPreferredSize(new Dimension(150, getHeight()));
+        
+        // --- INI ADALAH IMPLEMENTASI TAMPILAN STATUS ONLINE ---
+        userList.setCellRenderer(new UserListRenderer());
+        // ----------------------------------------------------
 
         // Kontrol Koneksi (Atas)
         JPanel topControlPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
@@ -72,7 +75,6 @@ public class ClientMain extends JFrame {
         add(mainPanel);
 
         // 2. Aksi Tombol
-        // onSendButtonClick akan mengambil recipient dari userList.getSelectedValue()
         sendButton.addActionListener(e -> onSendButtonClick());
         connectButton.addActionListener(e -> showConnectDialog());
 
@@ -89,19 +91,68 @@ public class ClientMain extends JFrame {
         setVisible(true);
     }
 
-    // --- Implementasi Koneksi (TETAP SAMA) ---
-    // ... showConnectDialog, onConnectButtonClick, dan semua method callback
-    // (displayMessage, logMessage, dll.) ...
+    // --- FITUR BARU: UserListRenderer untuk Tampilan Status Online ---
+    
+    /**
+     * Renderer kustom untuk JList yang menampilkan status 'Online' dengan ikon.
+     */
+    private class UserListRenderer extends DefaultListCellRenderer {
+        private final ImageIcon onlineIcon;
+        private final ImageIcon broadcastIcon;
 
-    // --- Implementasi Pengiriman Pesan (DIMODIFIKASI) ---
-
-    private void onSendButtonClick() {
-        String recipient = userList.getSelectedValue(); // Ambil recipient dari JList
-        if (recipient == null) {
-            recipient = "ALL (Broadcast)"; // Default ke Broadcast jika tidak ada yang dipilih
+        public UserListRenderer() {
+            // Buat ikon titik hijau (Online)
+            onlineIcon = createDotIcon(Color.GREEN); 
+            // Buat ikon titik biru/abu-abu (Broadcast)
+            broadcastIcon = createDotIcon(Color.GRAY.darker()); 
         }
 
-        // Hapus "(Broadcast)" jika ada
+        private ImageIcon createDotIcon(Color color) {
+            int size = 10;
+            // Gunakan BufferedImage untuk menggambar lingkaran
+            Image image = new java.awt.image.BufferedImage(size, size, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+            Graphics2D g2 = (Graphics2D) image.getGraphics();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(color);
+            g2.fillOval(0, 0, size - 1, size - 1);
+            g2.dispose();
+            return new ImageIcon(image);
+        }
+
+        @Override
+        public Component getListCellRendererComponent(JList<?> list, Object value, int index, 
+                                                      boolean isSelected, boolean cellHasFocus) {
+            
+            // Panggil implementasi default (penting untuk menangani seleksi warna)
+            JLabel label = (JLabel) super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+            
+            String user = (String) value;
+            
+            if (user.equalsIgnoreCase("ALL (Broadcast)")) {
+                label.setIcon(broadcastIcon);
+                // Kita juga bisa mengubah warna teks untuk Broadcast
+                label.setForeground(Color.BLUE.darker());
+            } else {
+                // Semua user yang ada di list dianggap online, jadi beri ikon hijau
+                label.setIcon(onlineIcon);
+            }
+            
+            // Tambahkan spasi di depan teks agar tidak terlalu mepet ikon
+            label.setText(" " + user); 
+            
+            return label;
+        }
+    }
+    // --------------------------------------------------------------------------
+
+    // --- Implementasi Pengiriman Pesan (TETAP SAMA) ---
+
+    private void onSendButtonClick() {
+        String recipient = userList.getSelectedValue(); 
+        if (recipient == null) {
+            recipient = "ALL (Broadcast)"; 
+        }
+
         String actualRecipient = recipient.replace(" (Broadcast)", "");
 
         String text = inputField.getText();
@@ -115,7 +166,7 @@ public class ClientMain extends JFrame {
         }
     }
 
-    // --- FITUR BARU: BUZZ ---
+    // --- FITUR BARU: BUZZ (TETAP SAMA) ---
 
     private void onBuzzButtonClick() {
         String recipient = userList.getSelectedValue();
@@ -125,13 +176,12 @@ public class ClientMain extends JFrame {
         }
 
         if (clientService != null) {
-            // Hapus "(Broadcast)" jika ada
             String actualRecipient = recipient.replace(" (Broadcast)", "");
             clientService.sendBuzz(actualRecipient);
         }
     }
 
-    // --- FITUR BARU: FILE TRANSFER ---
+    // --- FITUR BARU: FILE TRANSFER (TETAP SAMA) ---
 
     private void onFileButtonClick() {
         String recipient = userList.getSelectedValue();
@@ -140,19 +190,17 @@ public class ClientMain extends JFrame {
             return;
         }
 
-        // Buka File Chooser
         JFileChooser fileChooser = new JFileChooser();
         fileChooser.setDialogTitle("Pilih File untuk Dikirim ke " + recipient);
         int result = fileChooser.showOpenDialog(this);
 
         if (result == JFileChooser.APPROVE_OPTION) {
             File selectedFile = fileChooser.getSelectedFile();
-            if (selectedFile.length() > 50 * 1024 * 1024) { // Contoh: Batas 50MB
+            if (selectedFile.length() > 50 * 1024 * 1024) { 
                 logMessage("ERROR: File terlalu besar (Max 50MB).");
                 return;
             }
             if (clientService != null) {
-                // Hapus "(Broadcast)" jika ada
                 String actualRecipient = recipient.replace(" (Broadcast)", "");
                 clientService.sendFile(actualRecipient, selectedFile);
             }
@@ -161,23 +209,17 @@ public class ClientMain extends JFrame {
 
     // --- Implementasi Method Callback dari ClientService (TETAP SAMA) ---
 
-    /**
-     * Menampilkan pesan di area chat/log. Aman dipanggil dari ClientService (sudah
-     * di-invokeLater).
-     */
     public void displayMessage(String message) {
         chatArea.append(message + "\n");
     }
 
-    /**
-     * Menampilkan pesan log (untuk status koneksi/error).
-     */
     public void logMessage(String message) {
         chatArea.append("[LOG] " + message + "\n");
     }
 
     /**
      * Memperbarui JList pengguna yang terkoneksi.
+     * Logika ini menerima string array nama pengguna dari server dan memuatnya.
      */
     public void updateUserList(String[] users) {
         userListModel.clear();
@@ -189,9 +231,6 @@ public class ClientMain extends JFrame {
         }
     }
 
-    /**
-     * Memicu fitur "BUZZ" (Window Shake).
-     */
     public void triggerBuzz(String sender) {
         displayMessage(String.format("!!! BUZZ diterima dari %s !!!", sender));
         Point originalLoc = getLocation();
@@ -205,22 +244,15 @@ public class ClientMain extends JFrame {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         } finally {
-            setLocation(originalLoc); // Kembalikan ke posisi semula
+            setLocation(originalLoc); 
         }
     }
 
-    /**
-     * Dipanggil saat koneksi terputus secara tak terduga
-     * (IOException/SocketException).
-     */
     public void connectionLost() {
         logMessage("Koneksi ke server terputus secara tak terduga!");
         connectionClosed();
     }
 
-    /**
-     * Dipanggil saat koneksi berhasil ditutup secara bersih.
-     */
     public void connectionClosed() {
         logMessage("Koneksi telah ditutup.");
         updateGuiState(false);
@@ -228,19 +260,16 @@ public class ClientMain extends JFrame {
         userListModel.addElement("ALL (Broadcast)");
     }
 
-    /**
-     * Mengatur state tombol dan input field berdasarkan status koneksi.
-     */
     private void updateGuiState(boolean isConnected) {
         connectButton.setEnabled(!isConnected);
         sendButton.setEnabled(isConnected);
-        buzzButton.setEnabled(isConnected); // Aktifkan BUZZ saat terhubung
-        fileButton.setEnabled(isConnected); // Aktifkan File saat terhubung
+        buzzButton.setEnabled(isConnected); 
+        fileButton.setEnabled(isConnected); 
         inputField.setEnabled(isConnected);
         inputField.setText(isConnected ? "" : "Terputus. Silakan Connect.");
     }
 
-    // --- Getter & Connect Logic (Untuk konsistensi) ---
+    // --- Getter & Connect Logic (TETAP SAMA) ---
 
     public String getUsername() {
         return this.currentUsername;
