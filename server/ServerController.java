@@ -76,7 +76,7 @@ public class ServerController {
             Message msg = new Message(MessageType.FILE_REQUEST);
             msg.setSender(senderName);
             msg.setRecipient(recipientName);
-            msg.setFileName(fileName);
+            msg.setContent(fileName);
             msg.setFileChunk(data);
 
             targetClient.sendMessage(msg);
