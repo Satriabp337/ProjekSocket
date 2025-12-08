@@ -5,6 +5,8 @@ import common.MessageType;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
+import java.awt.event.KeyAdapter; // Diperlukan
+import java.awt.event.KeyEvent; // Diperlukan
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.File;
@@ -20,10 +22,20 @@ public class ClientMain extends JFrame {
     private String currentUsername;
     private HashMap<String, JTextArea> chatPanels = new HashMap<>(); // Simpan area chat per user
 
+    // **FITUR BARU: STATE UNTUK TYPING INDICATOR**
+    private HashMap<String, JLabel> typingIndicators = new HashMap<>(); 
+    private Timer typingTimer;
+    private static final int TYPING_DELAY_MS = 2000; // 2 detik
+    // ------------------------------------------
+
     // --- Komponen GUI ---
     private JTabbedPane tabbedPane = new JTabbedPane(); // Tab System
     private JTextField inputField = new JTextField();
     private JLabel statusLabel = new JLabel("Status: Ready"); // Status Bar Bawah
+    
+    // **FIELD PROGRESS BAR**
+    private JProgressBar fileProgressBar = new JProgressBar();
+    // ----------------------------------
 
     // Tombol
     private JButton sendButton = new JButton("Kirim");
@@ -90,11 +102,22 @@ public class ClientMain extends JFrame {
 
         bottomPanel.add(inputPanel, BorderLayout.NORTH);
 
-        // Status Bar (Biar log bersih)
-        statusLabel.setBorder(new EmptyBorder(2, 5, 2, 5));
+        // Pisahkan status label dan progress bar dalam satu StatusBar
+        JPanel statusBar = new JPanel(new BorderLayout());
+        statusBar.setBorder(new EmptyBorder(2, 5, 2, 5));
+        
         statusLabel.setForeground(Color.GRAY);
         statusLabel.setFont(new Font("Segoe UI", Font.PLAIN, 11));
-        bottomPanel.add(statusLabel, BorderLayout.SOUTH);
+        
+        // Konfigurasi Progress Bar
+        fileProgressBar.setStringPainted(true);
+        fileProgressBar.setPreferredSize(new Dimension(150, 18));
+        fileProgressBar.setVisible(false); // Sembunyikan secara default
+        
+        statusBar.add(statusLabel, BorderLayout.CENTER);
+        statusBar.add(fileProgressBar, BorderLayout.EAST); // Progress bar di kanan status bar
+        
+        bottomPanel.add(statusBar, BorderLayout.SOUTH);
 
         add(bottomPanel, BorderLayout.SOUTH);
 
@@ -104,6 +127,10 @@ public class ClientMain extends JFrame {
         connectButton.addActionListener(e -> showConnectDialog());
         buzzButton.addActionListener(e -> onBuzzButtonClick());
         fileButton.addActionListener(e -> onFileButtonClick());
+        
+        // **FITUR BARU: LISTENER UNTUK TYPING INDICATOR**
+        setupTypingListener();
+        // ------------------------------------------------
 
         // Inisialisasi Service
         clientService = new ClientService(this);
@@ -112,15 +139,78 @@ public class ClientMain extends JFrame {
         setVisible(true);
     }
 
-    // --- LOGIKA TAB SYSTEM (JANTUNG GUI BARU) ---
+    // -----------------------------------------------------
+    //          LOGIKA TYPING INDICATOR (BARU)
+    // -----------------------------------------------------
 
     /**
+     * Menyiapkan Key Listener pada inputField dan Timer untuk menonaktifkan
+     * indikator pengetikan setelah 2 detik diam.
+     */
+    private void setupTypingListener() {
+        typingTimer = new Timer(TYPING_DELAY_MS, e -> {
+            // Timer habis: Berhenti mengetik
+            String recipient = getActiveRecipient();
+            if (clientService.isConnected() && !recipient.equals("ALL")) {
+                clientService.sendTypingStop(recipient);
+            }
+            typingTimer.stop();
+        });
+        typingTimer.setRepeats(false); // Hanya sekali jalan
+
+        inputField.addKeyListener(new KeyAdapter() {
+            @Override
+            public void keyTyped(KeyEvent e) {
+                // Saat ada ketukan tombol
+                String recipient = getActiveRecipient();
+                
+                // Indikator hanya untuk Private Chat
+                if (!recipient.equals("ALL") && clientService.isConnected()) {
+                    if (!typingTimer.isRunning()) {
+                        // Mulai mengetik (jika sebelumnya stop)
+                        clientService.sendTypingStart(recipient);
+                    }
+                    // Reset timer, memberi 2 detik lagi sebelum TYPING_STOP dikirim
+                    typingTimer.restart();
+                }
+            }
+        });
+    }
+
+    /**
+     * Callback dari ClientService saat pesan TYPING_START/STOP diterima.
+     */
+    public void updateTypingIndicator(String sender, boolean isTyping) {
+        SwingUtilities.invokeLater(() -> {
+            JLabel indicator = typingIndicators.get(sender);
+            if (indicator != null) {
+                if (isTyping) {
+                    indicator.setText(sender + " is typing...");
+                    indicator.setVisible(true);
+                } else {
+                    indicator.setText(" "); // Kosongkan
+                    indicator.setVisible(false);
+                }
+            }
+        });
+    }
+
+
+    // -----------------------------------------------------
+    //          LOGIKA TAB SYSTEM (MODIFIKASI)
+    // -----------------------------------------------------
+    
+    /**
      * Membuat tab baru jika belum ada, atau fokus ke tab yang sudah ada.
+     * **DIMODIFIKASI: Sekarang membungkus JScrollPane dengan JPanel untuk menampung JLabel indikator.**
      */
     private void createChatTab(String title) {
         if (chatPanels.containsKey(title)) {
-            // Kalau sudah ada, langsung fokus ke sana
-            tabbedPane.setSelectedComponent(chatPanels.get(title).getParent().getParent());
+             // Harus cari parent yang benar (JScrollPane di dalam JPanel indikator)
+            int index = tabbedPane.indexOfTab(title);
+            if (index != -1) {
+                tabbedPane.setSelectedIndex(index);
+            }
             return;
         }
 
@@ -134,13 +224,28 @@ public class ClientMain extends JFrame {
         area.setBorder(new EmptyBorder(5, 5, 5, 5));
 
         chatPanels.put(title, area);
-        tabbedPane.addTab(title, new JScrollPane(area));
-
-        // Auto-scroll ke bawah saat ada chat baru
-        // (Default behavior JScrollPane biasanya sudah handle, tapi bisa diperkuat)
+        
+        // Bungkus JTextArea dengan JScrollPane
+        JScrollPane scrollPane = new JScrollPane(area);
+        
+        // **FITUR BARU: LABEL INDIKATOR PENGETIKAN**
+        JLabel indicator = new JLabel(" ");
+        indicator.setFont(new Font("Segoe UI", Font.ITALIC, 11));
+        indicator.setForeground(Color.GRAY.darker());
+        indicator.setBorder(new EmptyBorder(2, 5, 2, 5));
+        indicator.setVisible(false);
+        typingIndicators.put(title, indicator);
+        
+        // Bungkus JLabel dan JScrollPane dalam satu JPanel
+        JPanel indicatorPanel = new JPanel(new BorderLayout());
+        indicatorPanel.add(indicator, BorderLayout.NORTH); // Indikator di atas
+        indicatorPanel.add(scrollPane, BorderLayout.CENTER); // Chat Area di tengah
+        
+        tabbedPane.addTab(title, indicatorPanel); // Masukkan panel ini ke TabbedPane
+        // ----------------------------------------------------
     }
 
-    private void openPrivateTab(String targetUser) {
+    public void openPrivateTab(String targetUser) {
         if (!chatPanels.containsKey(targetUser)) {
             createChatTab(targetUser);
         }
@@ -152,7 +257,6 @@ public class ClientMain extends JFrame {
 
     /**
      * Mendapatkan nama penerima berdasarkan TAB yang sedang aktif.
-     * 
      * @return "ALL" jika di Lobby, atau "NamaUser" jika di tab private.
      */
     private String getActiveRecipient() {
@@ -167,20 +271,19 @@ public class ClientMain extends JFrame {
     }
 
     // --- LOGIKA PENGIRIMAN ---
+    // (onSendButtonClick, onBuzzButtonClick, onFileButtonClick - TIDAK BERUBAH)
 
     private void onSendButtonClick() {
+        // ... (Logika kirim)
         String text = inputField.getText().trim();
         if (text.isEmpty())
             return;
 
-        // Kirim ke siapa? Tergantung Tab mana yang lagi dibuka!
         String recipient = getActiveRecipient();
 
         if (clientService != null) {
             clientService.sendTextMessage(recipient, text);
-
-            // Tampilkan chat sendiri di layar (kecuali broadcast, karena server akan
-            // memantulkan balik)
+            // ... (Kode cetak chat sendiri dan reset inputField tidak berubah)
             if (!recipient.equals("ALL")) {
                 appendToChat(recipient, "Saya: " + text);
             }
@@ -188,9 +291,19 @@ public class ClientMain extends JFrame {
         } else {
             logMessage("Anda belum terhubung.");
         }
+        
+        // **PENTING:** Hentikan timer pengetikan secara manual setelah kirim
+        if (typingTimer != null && typingTimer.isRunning()) {
+            typingTimer.stop();
+            // Kirim sinyal TYPING_STOP setelah pesan dikirim
+            if (!recipient.equals("ALL") && clientService.isConnected()) {
+                 clientService.sendTypingStop(recipient);
+            }
+        }
     }
 
     private void onBuzzButtonClick() {
+        // ... (tidak berubah)
         String recipient = getActiveRecipient();
         if (recipient.equals("ALL")) {
             int confirm = JOptionPane.showConfirmDialog(this,
@@ -204,6 +317,7 @@ public class ClientMain extends JFrame {
     }
 
     private void onFileButtonClick() {
+        // ... (tidak berubah)
         String recipient = getActiveRecipient();
 
         JFileChooser fileChooser = new JFileChooser();
@@ -225,7 +339,7 @@ public class ClientMain extends JFrame {
             }
         }
     }
-
+    
     // --- LOGIKA PENERIMAAN (CALLBACKS) ---
 
     /**
@@ -246,8 +360,11 @@ public class ClientMain extends JFrame {
 
             tabName = sender; // Pesan dari Novran masuk ke Tab "Novran"
             if (!chatPanels.containsKey(tabName)) {
-                createChatTab(tabName); // Bikin tab baru otomatis kalau ada yang chat!
+                openPrivateTab(tabName); // Bikin tab baru otomatis & pindah fokus!
             }
+            
+            // **PENTING:** Sembunyikan indikator pengetikan saat pesan masuk
+            updateTypingIndicator(tabName, false);
         }
 
         // Format pesan
@@ -266,6 +383,19 @@ public class ClientMain extends JFrame {
 
     // --- Helper Lainnya ---
 
+    /**
+     * Method untuk mengupdate JProgressBar
+     */
+    public void updateFileProgress(boolean visible, int percentage, String text) {
+        SwingUtilities.invokeLater(() -> {
+            fileProgressBar.setVisible(visible);
+            if (visible) {
+                fileProgressBar.setValue(percentage);
+                fileProgressBar.setString(text);
+            }
+        });
+    }
+
     public void logMessage(String message) {
         // Log masuk ke Status Bar bawah, bukan mengotori chat area
         statusLabel.setText(message);
@@ -273,6 +403,11 @@ public class ClientMain extends JFrame {
         // Kalau error fatal, tampilkan popup juga
         if (message.startsWith("ERROR")) {
             JOptionPane.showMessageDialog(this, message, "Error Koneksi", JOptionPane.ERROR_MESSAGE);
+        }
+        
+        // Sembunyikan progress bar jika log error/status normal
+        if (!message.contains("Mengirim file") && !message.contains("Menerima file")) {
+            updateFileProgress(false, 0, "");
         }
     }
 
@@ -293,9 +428,14 @@ public class ClientMain extends JFrame {
     public void triggerBuzz(String sender) {
         // Efek getar + Pindah ke tab pengirim
         if (!sender.equals(currentUsername) && chatPanels.containsKey(sender)) {
-            tabbedPane.setSelectedComponent(chatPanels.get(sender).getParent().getParent());
+            // Cari JPanel yang membungkus JScrollPane untuk mendapatkan komponen tab yang benar
+            Component component = chatPanels.get(sender).getParent().getParent();
+            if (component != null) {
+                tabbedPane.setSelectedComponent(component);
+            }
         }
 
+        // ... (Logika getar tidak berubah)
         Point original = getLocation();
         new Thread(() -> {
             try {
@@ -318,6 +458,7 @@ public class ClientMain extends JFrame {
         updateGuiState(false);
         userListModel.clear();
         chatPanels.clear();
+        typingIndicators.clear(); // Reset indicators
         tabbedPane.removeAll();
         createChatTab("Lobby"); // Reset ke lobby kosong
     }
@@ -328,7 +469,6 @@ public class ClientMain extends JFrame {
     }
 
     // --- State Management ---
-
     private void updateGuiState(boolean isConnected) {
         connectButton.setEnabled(!isConnected);
         sendButton.setEnabled(isConnected);

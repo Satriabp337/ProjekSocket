@@ -7,7 +7,10 @@ public enum MessageType {
     DISCONNECT,         // Klien meminta putus koneksi
     USER_LIST_UPDATE,   // Server mengirimkan daftar pengguna yang terkoneksi
     
-
+// **FITUR BARU: Indikator Pengetikan**
+    TYPING_START,       // Klien memulai pengetikan (untuk Private Chat)
+    TYPING_STOP,        // Klien berhenti mengetik
+    
     // 2. Tipe Chat & Aksi
     BROADCAST_CHAT,     // Pesan teks publik
     PRIVATE_CHAT,       // Pesan teks pribadi

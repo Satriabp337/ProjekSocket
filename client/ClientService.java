@@ -30,6 +30,10 @@ public class ClientService {
     private String receivingFileName;
     private volatile long totalBytesReceived = 0;
     private long expectedFileSize = 0;
+    
+    // **FITUR BARU: STATE UNTUK FILE SENDING**
+    private volatile long totalBytesSent = 0;
+    private long expectedFileToSendSize = 0;
     // ---------------------------------------------
 
     // --- Konstruktor & Koneksi ---
@@ -65,6 +69,12 @@ public class ClientService {
             return false;
         }
     }
+    
+    // **FITUR BARU: Helper untuk Cek Koneksi**
+    public boolean isConnected() {
+        return socket != null && !socket.isClosed();
+    }
+    // ----------------------------------------
 
     // --- Pengiriman Pesan ---
 
@@ -103,6 +113,22 @@ public class ClientService {
         msg.setSender(gui.getUsername());
         sendMessage(msg);
     }
+    
+    // **FITUR BARU: Method Pengiriman Status Mengetik**
+    public void sendTypingStart(String recipient) {
+        Message msg = new Message(MessageType.TYPING_START);
+        msg.setRecipient(recipient);
+        msg.setSender(gui.getUsername());
+        sendMessage(msg);
+    }
+
+    public void sendTypingStop(String recipient) {
+        Message msg = new Message(MessageType.TYPING_STOP);
+        msg.setRecipient(recipient);
+        msg.setSender(gui.getUsername());
+        sendMessage(msg);
+    }
+    // ---------------------------------------------------
 
     /**
      * Mengirim file dengan memecahnya menjadi potongan-potongan (chunks).
@@ -115,6 +141,10 @@ public class ClientService {
         }
 
         new Thread(() -> {
+            // Inisialisasi state pengiriman
+            this.expectedFileToSendSize = file.length();
+            this.totalBytesSent = 0;
+            
             try (FileInputStream fis = new FileInputStream(file)) {
 
                 // 1. Kirim Pesan Permintaan File (Header: FILE_REQUEST)
@@ -141,7 +171,18 @@ public class ClientService {
                     chunkMsg.setFileChunk(data);
 
                     sendMessage(chunkMsg);
+                    
+                    // **FITUR PROGRESS BAR: UPDATE PENGIRIMAN**
+                    totalBytesSent += bytesRead;
+                    int percentage = (int) ((totalBytesSent * 100) / expectedFileToSendSize);
+                    String statusText = String.format("%d%% Sent", percentage);
+                    
+                    // Panggil method GUI di Event Dispatch Thread
+                    SwingUtilities.invokeLater(() -> gui.updateFileProgress(true, percentage, statusText));
                 }
+                
+                // **FITUR PROGRESS BAR: Selesai Pengiriman**
+                SwingUtilities.invokeLater(() -> gui.updateFileProgress(false, 100, ""));
 
                 // 3. Kirim Pesan Konfirmasi Selesai (FILE_COMPLETE)
                 Message finishedMsg = new Message(MessageType.FILE_COMPLETE);
@@ -153,6 +194,8 @@ public class ClientService {
                 gui.logMessage("✅ Pengiriman file selesai.");
 
             } catch (Exception e) {
+                // Sembunyikan progress bar jika ada error
+                SwingUtilities.invokeLater(() -> gui.updateFileProgress(false, 0, ""));
                 SwingUtilities.invokeLater(() -> gui.logMessage("ERROR saat mengirim file: " + e.getMessage()));
             }
         }, "ClientFileSenderThread").start();
@@ -203,6 +246,25 @@ public class ClientService {
                 // Panggil method baru GUI yang mendukung Tab
                 SwingUtilities.invokeLater(() -> gui.incomingChat(msg.getSender(), msg.getContent(), true));
                 break;
+                
+            // **FITUR BARU: Handle Typing Indicator**
+            case TYPING_START:
+                String typingSender = msg.getSender();
+                SwingUtilities.invokeLater(() -> {
+                    // Pastikan tab pengirim ada
+                    if (msg.getRecipient() != null && !msg.getRecipient().equalsIgnoreCase("ALL")) {
+                        gui.openPrivateTab(typingSender);
+                    }
+                    gui.updateTypingIndicator(typingSender, true);
+                });
+                break;
+                
+            case TYPING_STOP:
+                String stoppingSender = msg.getSender();
+                SwingUtilities.invokeLater(() -> gui.updateTypingIndicator(stoppingSender, false));
+                break;
+            // -----------------------------------------
+                
             case USER_LIST_UPDATE:
                 if (msg.getContent() != null && !msg.getContent().isEmpty()) {
                     SwingUtilities.invokeLater(() -> gui.updateUserList(msg.getContent().split(",")));
@@ -224,7 +286,7 @@ public class ClientService {
                     this.receivingFileName = msg.getContent();
                     this.expectedFileSize = msg.getFileSize();
                     this.totalBytesReceived = 0;
-
+                    
                     try {
                         File downloadDir = new File("downloads");
                         if (!downloadDir.exists())
@@ -254,8 +316,19 @@ public class ClientService {
                                 currentFileWriter.write(chunk);
                                 // Hanya memperbarui variabel status total bytes
                                 totalBytesReceived += chunk.length;
+                                
+                                // **FITUR PROGRESS BAR: UPDATE PENERIMAAN**
+                                if (expectedFileSize > 0) {
+                                    int percentage = (int) ((totalBytesReceived * 100) / expectedFileSize);
+                                    String statusText = String.format("%d%% Recv", percentage);
+                                    // Panggil method GUI di Event Dispatch Thread
+                                    SwingUtilities.invokeLater(() -> gui.updateFileProgress(true, percentage, statusText));
+                                }
+                                // ------------------------------------------
                             }
                         } catch (IOException e) {
+                            // Sembunyikan progress bar jika ada error
+                            SwingUtilities.invokeLater(() -> gui.updateFileProgress(false, 0, ""));
                             SwingUtilities.invokeLater(
                                     () -> gui.logMessage("ERROR: Gagal menulis chunk file: " + e.getMessage()));
                             try {
@@ -276,6 +349,10 @@ public class ClientService {
                             currentFileWriter.close();
                             gui.logMessage(String.format("✅ Penerimaan file '%s' selesai. Total %d bytes.",
                                     receivingFileName, totalBytesReceived));
+                            
+                            // **FITUR PROGRESS BAR: Selesai Penerimaan**
+                            gui.updateFileProgress(false, 100, "");
+                            
                             currentFileWriter = null;
                             receivingFileName = null;
                             expectedFileSize = 0;
@@ -296,7 +373,7 @@ public class ClientService {
     }
 
     // --- Penutupan Koneksi ---
-
+    
     /**
      * Menutup koneksi secara bersih.
      */
@@ -327,6 +404,10 @@ public class ClientService {
                 }
                 currentFileWriter = null;
             }
+            
+            // **PROGRESS BAR: Sembunyikan saat disconnect**
+            SwingUtilities.invokeLater(() -> gui.updateFileProgress(false, 0, ""));
+            
         } catch (IOException e) {
             SwingUtilities.invokeLater(() -> gui.logMessage("ERROR saat menutup koneksi: " + e.getMessage()));
         } finally {
