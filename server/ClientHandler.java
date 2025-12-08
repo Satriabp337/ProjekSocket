@@ -87,6 +87,11 @@ public class ClientHandler implements Runnable {
                     case BUZZ:
                         ServerController.relayBuzz(msg);
                         break;
+
+                    case TYPING_START:
+                    case TYPING_STOP:
+                        ServerController.relayTypingStatus(msg);
+                        break;
                 }
             }
         } catch (Exception e) {

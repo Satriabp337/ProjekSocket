@@ -23,7 +23,7 @@ public class ClientMain extends JFrame {
     private HashMap<String, JTextArea> chatPanels = new HashMap<>(); // Simpan area chat per user
 
     // **FITUR BARU: STATE UNTUK TYPING INDICATOR**
-    private HashMap<String, JLabel> typingIndicators = new HashMap<>(); 
+    private HashMap<String, JLabel> typingIndicators = new HashMap<>();
     private Timer typingTimer;
     private static final int TYPING_DELAY_MS = 2000; // 2 detik
     // ------------------------------------------
@@ -32,7 +32,7 @@ public class ClientMain extends JFrame {
     private JTabbedPane tabbedPane = new JTabbedPane(); // Tab System
     private JTextField inputField = new JTextField();
     private JLabel statusLabel = new JLabel("Status: Ready"); // Status Bar Bawah
-    
+
     // **FIELD PROGRESS BAR**
     private JProgressBar fileProgressBar = new JProgressBar();
     // ----------------------------------
@@ -105,18 +105,18 @@ public class ClientMain extends JFrame {
         // Pisahkan status label dan progress bar dalam satu StatusBar
         JPanel statusBar = new JPanel(new BorderLayout());
         statusBar.setBorder(new EmptyBorder(2, 5, 2, 5));
-        
+
         statusLabel.setForeground(Color.GRAY);
         statusLabel.setFont(new Font("Segoe UI", Font.PLAIN, 11));
-        
+
         // Konfigurasi Progress Bar
         fileProgressBar.setStringPainted(true);
         fileProgressBar.setPreferredSize(new Dimension(150, 18));
         fileProgressBar.setVisible(false); // Sembunyikan secara default
-        
+
         statusBar.add(statusLabel, BorderLayout.CENTER);
         statusBar.add(fileProgressBar, BorderLayout.EAST); // Progress bar di kanan status bar
-        
+
         bottomPanel.add(statusBar, BorderLayout.SOUTH);
 
         add(bottomPanel, BorderLayout.SOUTH);
@@ -127,7 +127,7 @@ public class ClientMain extends JFrame {
         connectButton.addActionListener(e -> showConnectDialog());
         buzzButton.addActionListener(e -> onBuzzButtonClick());
         fileButton.addActionListener(e -> onFileButtonClick());
-        
+
         // **FITUR BARU: LISTENER UNTUK TYPING INDICATOR**
         setupTypingListener();
         // ------------------------------------------------
@@ -140,7 +140,7 @@ public class ClientMain extends JFrame {
     }
 
     // -----------------------------------------------------
-    //          LOGIKA TYPING INDICATOR (BARU)
+    // LOGIKA TYPING INDICATOR (BARU)
     // -----------------------------------------------------
 
     /**
@@ -163,7 +163,7 @@ public class ClientMain extends JFrame {
             public void keyTyped(KeyEvent e) {
                 // Saat ada ketukan tombol
                 String recipient = getActiveRecipient();
-                
+
                 // Indikator hanya untuk Private Chat
                 if (!recipient.equals("ALL") && clientService.isConnected()) {
                     if (!typingTimer.isRunning()) {
@@ -195,18 +195,18 @@ public class ClientMain extends JFrame {
         });
     }
 
+    // -----------------------------------------------------
+    // LOGIKA TAB SYSTEM (MODIFIKASI)
+    // -----------------------------------------------------
 
-    // -----------------------------------------------------
-    //          LOGIKA TAB SYSTEM (MODIFIKASI)
-    // -----------------------------------------------------
-    
     /**
      * Membuat tab baru jika belum ada, atau fokus ke tab yang sudah ada.
-     * **DIMODIFIKASI: Sekarang membungkus JScrollPane dengan JPanel untuk menampung JLabel indikator.**
+     * **DIMODIFIKASI: Sekarang membungkus JScrollPane dengan JPanel untuk menampung
+     * JLabel indikator.**
      */
     private void createChatTab(String title) {
         if (chatPanels.containsKey(title)) {
-             // Harus cari parent yang benar (JScrollPane di dalam JPanel indikator)
+            // Harus cari parent yang benar (JScrollPane di dalam JPanel indikator)
             int index = tabbedPane.indexOfTab(title);
             if (index != -1) {
                 tabbedPane.setSelectedIndex(index);
@@ -224,10 +224,10 @@ public class ClientMain extends JFrame {
         area.setBorder(new EmptyBorder(5, 5, 5, 5));
 
         chatPanels.put(title, area);
-        
+
         // Bungkus JTextArea dengan JScrollPane
         JScrollPane scrollPane = new JScrollPane(area);
-        
+
         // **FITUR BARU: LABEL INDIKATOR PENGETIKAN**
         JLabel indicator = new JLabel(" ");
         indicator.setFont(new Font("Segoe UI", Font.ITALIC, 11));
@@ -235,12 +235,12 @@ public class ClientMain extends JFrame {
         indicator.setBorder(new EmptyBorder(2, 5, 2, 5));
         indicator.setVisible(false);
         typingIndicators.put(title, indicator);
-        
+
         // Bungkus JLabel dan JScrollPane dalam satu JPanel
         JPanel indicatorPanel = new JPanel(new BorderLayout());
         indicatorPanel.add(indicator, BorderLayout.NORTH); // Indikator di atas
         indicatorPanel.add(scrollPane, BorderLayout.CENTER); // Chat Area di tengah
-        
+
         tabbedPane.addTab(title, indicatorPanel); // Masukkan panel ini ke TabbedPane
         // ----------------------------------------------------
     }
@@ -257,6 +257,7 @@ public class ClientMain extends JFrame {
 
     /**
      * Mendapatkan nama penerima berdasarkan TAB yang sedang aktif.
+     * 
      * @return "ALL" jika di Lobby, atau "NamaUser" jika di tab private.
      */
     private String getActiveRecipient() {
@@ -291,13 +292,13 @@ public class ClientMain extends JFrame {
         } else {
             logMessage("Anda belum terhubung.");
         }
-        
+
         // **PENTING:** Hentikan timer pengetikan secara manual setelah kirim
         if (typingTimer != null && typingTimer.isRunning()) {
             typingTimer.stop();
             // Kirim sinyal TYPING_STOP setelah pesan dikirim
             if (!recipient.equals("ALL") && clientService.isConnected()) {
-                 clientService.sendTypingStop(recipient);
+                clientService.sendTypingStop(recipient);
             }
         }
     }
@@ -339,7 +340,7 @@ public class ClientMain extends JFrame {
             }
         }
     }
-    
+
     // --- LOGIKA PENERIMAAN (CALLBACKS) ---
 
     /**
@@ -362,7 +363,7 @@ public class ClientMain extends JFrame {
             if (!chatPanels.containsKey(tabName)) {
                 openPrivateTab(tabName); // Bikin tab baru otomatis & pindah fokus!
             }
-            
+
             // **PENTING:** Sembunyikan indikator pengetikan saat pesan masuk
             updateTypingIndicator(tabName, false);
         }
@@ -404,7 +405,7 @@ public class ClientMain extends JFrame {
         if (message.startsWith("ERROR")) {
             JOptionPane.showMessageDialog(this, message, "Error Koneksi", JOptionPane.ERROR_MESSAGE);
         }
-        
+
         // Sembunyikan progress bar jika log error/status normal
         if (!message.contains("Mengirim file") && !message.contains("Menerima file")) {
             updateFileProgress(false, 0, "");
@@ -426,16 +427,25 @@ public class ClientMain extends JFrame {
     }
 
     public void triggerBuzz(String sender) {
-        // Efek getar + Pindah ke tab pengirim
+        // Cek apakah pengirim bukan diri sendiri DAN kita punya chat history sama dia
         if (!sender.equals(currentUsername) && chatPanels.containsKey(sender)) {
-            // Cari JPanel yang membungkus JScrollPane untuk mendapatkan komponen tab yang benar
-            Component component = chatPanels.get(sender).getParent().getParent();
-            if (component != null) {
-                tabbedPane.setSelectedComponent(component);
+            JTextArea targetArea = chatPanels.get(sender);
+
+            // --- CARA AMAN: Cari Tab yang memuat Area Chat ini ---
+            for (int i = 0; i < tabbedPane.getTabCount(); i++) {
+                Component tabComp = tabbedPane.getComponentAt(i);
+                // Cek apakah Chat Area ini adalah anak/cucu dari Tab ini
+                if (SwingUtilities.isDescendingFrom(targetArea, tabComp)) {
+                    tabbedPane.setSelectedIndex(i); // Pilih Tab berdasarkan Index (Pasti Aman)
+                    break;
+                }
             }
+            // ----------------------------------------------------
         }
 
-        // ... (Logika getar tidak berubah)
+        // Efek Suara & Getar
+        Toolkit.getDefaultToolkit().beep();
+
         Point original = getLocation();
         new Thread(() -> {
             try {

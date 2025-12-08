@@ -30,7 +30,7 @@ public class ClientService {
     private String receivingFileName;
     private volatile long totalBytesReceived = 0;
     private long expectedFileSize = 0;
-    
+
     // **FITUR BARU: STATE UNTUK FILE SENDING**
     private volatile long totalBytesSent = 0;
     private long expectedFileToSendSize = 0;
@@ -69,7 +69,7 @@ public class ClientService {
             return false;
         }
     }
-    
+
     // **FITUR BARU: Helper untuk Cek Koneksi**
     public boolean isConnected() {
         return socket != null && !socket.isClosed();
@@ -113,7 +113,7 @@ public class ClientService {
         msg.setSender(gui.getUsername());
         sendMessage(msg);
     }
-    
+
     // **FITUR BARU: Method Pengiriman Status Mengetik**
     public void sendTypingStart(String recipient) {
         Message msg = new Message(MessageType.TYPING_START);
@@ -144,7 +144,7 @@ public class ClientService {
             // Inisialisasi state pengiriman
             this.expectedFileToSendSize = file.length();
             this.totalBytesSent = 0;
-            
+
             try (FileInputStream fis = new FileInputStream(file)) {
 
                 // 1. Kirim Pesan Permintaan File (Header: FILE_REQUEST)
@@ -171,16 +171,16 @@ public class ClientService {
                     chunkMsg.setFileChunk(data);
 
                     sendMessage(chunkMsg);
-                    
+
                     // **FITUR PROGRESS BAR: UPDATE PENGIRIMAN**
                     totalBytesSent += bytesRead;
                     int percentage = (int) ((totalBytesSent * 100) / expectedFileToSendSize);
                     String statusText = String.format("%d%% Sent", percentage);
-                    
+
                     // Panggil method GUI di Event Dispatch Thread
                     SwingUtilities.invokeLater(() -> gui.updateFileProgress(true, percentage, statusText));
                 }
-                
+
                 // **FITUR PROGRESS BAR: Selesai Pengiriman**
                 SwingUtilities.invokeLater(() -> gui.updateFileProgress(false, 100, ""));
 
@@ -246,7 +246,7 @@ public class ClientService {
                 // Panggil method baru GUI yang mendukung Tab
                 SwingUtilities.invokeLater(() -> gui.incomingChat(msg.getSender(), msg.getContent(), true));
                 break;
-                
+
             // **FITUR BARU: Handle Typing Indicator**
             case TYPING_START:
                 String typingSender = msg.getSender();
@@ -258,13 +258,13 @@ public class ClientService {
                     gui.updateTypingIndicator(typingSender, true);
                 });
                 break;
-                
+
             case TYPING_STOP:
                 String stoppingSender = msg.getSender();
                 SwingUtilities.invokeLater(() -> gui.updateTypingIndicator(stoppingSender, false));
                 break;
             // -----------------------------------------
-                
+
             case USER_LIST_UPDATE:
                 if (msg.getContent() != null && !msg.getContent().isEmpty()) {
                     SwingUtilities.invokeLater(() -> gui.updateUserList(msg.getContent().split(",")));
@@ -282,63 +282,97 @@ public class ClientService {
 
             // --- FILE RECEIVER LOGIC ---
             case FILE_REQUEST:
+
                 SwingUtilities.invokeLater(() -> {
-                    this.receivingFileName = msg.getContent();
-                    this.expectedFileSize = msg.getFileSize();
-                    this.totalBytesReceived = 0;
-                    
-                    try {
-                        File downloadDir = new File("downloads");
-                        if (!downloadDir.exists())
-                            downloadDir.mkdir();
-                        File outputFile = new File(downloadDir, this.receivingFileName);
+                    String sender = msg.getSender();
+                    String fileName = msg.getContent();
+                    long size = msg.getFileSize();
 
-                        currentFileWriter = new FileOutputStream(outputFile);
-                        gui.logMessage(String.format("Menerima file '%s' (%d bytes) dari %s. Menyimpan ke: %s",
-                                receivingFileName, expectedFileSize, msg.getSender(), outputFile.getAbsolutePath()));
+                    // Tampilkan Popup Konfirmasi
+                    int choice = javax.swing.JOptionPane.showConfirmDialog(gui,
+                            "Terima file '" + fileName + "' (" + (size / 1024) + " KB) dari " + sender + "?",
+                            "File Masuk",
+                            javax.swing.JOptionPane.YES_NO_OPTION);
 
-                    } catch (IOException e) {
-                        gui.logMessage("ERROR: Gagal membuat file untuk penerimaan: " + e.getMessage());
+                    if (choice == javax.swing.JOptionPane.YES_OPTION) {
+                        // USER MAU DOWNLOAD
+                        this.receivingFileName = fileName;
+                        this.expectedFileSize = size;
+                        this.totalBytesReceived = 0;
+
+                        try {
+                            File downloadDir = new File("downloads");
+                            if (!downloadDir.exists())
+                                downloadDir.mkdir();
+                            File outputFile = new File(downloadDir, this.receivingFileName);
+
+                            // BUKA KERAN PENYIMPANAN
+                            currentFileWriter = new FileOutputStream(outputFile);
+                            gui.logMessage("Menerima file: " + fileName);
+
+                        } catch (IOException e) {
+                            gui.logMessage("ERROR membuat file: " + e.getMessage());
+                            currentFileWriter = null; // Gagal, jadi null
+                        }
+                    } else {
+                        // USER MENOLAK
+                        gui.logMessage("Menolak file dari " + sender);
+                        currentFileWriter = null; // KUNCI UTAMA: Set null biar chunk dibuang
                     }
                 });
                 break;
 
             case FILE_CHUNK:
-                // !! PERBAIKAN PENTING: Jalankan I/O disk (File Writer) di thread terpisah dari
-                // Listener Thread !!
+                // Cek: Apakah Keran Penyimpanan (currentFileWriter) terbuka?
                 if (currentFileWriter != null) {
-                    // Start thread baru untuk menulis chunk ke disk
+
+                    // Ambil data potongan file dari pesan
+                    byte[] chunk = msg.getFileChunk();
+
+                    // tidak macet menunggu Harddisk menulis data.
                     new Thread(() -> {
                         try {
-                            byte[] chunk = msg.getFileChunk();
                             if (chunk != null) {
-                                // Menulis ke disk (Operasi I/O)
+                                // 1. Tulis Byte ke Harddisk (I/O Operation)
                                 currentFileWriter.write(chunk);
-                                // Hanya memperbarui variabel status total bytes
-                                totalBytesReceived += chunk.length;
-                                
-                                // **FITUR PROGRESS BAR: UPDATE PENERIMAAN**
-                                if (expectedFileSize > 0) {
-                                    int percentage = (int) ((totalBytesReceived * 100) / expectedFileSize);
-                                    String statusText = String.format("%d%% Recv", percentage);
-                                    // Panggil method GUI di Event Dispatch Thread
-                                    SwingUtilities.invokeLater(() -> gui.updateFileProgress(true, percentage, statusText));
+
+                                // 2. Update Counter Total Byte
+                                synchronized (this) {
+                                    totalBytesReceived += chunk.length;
                                 }
-                                // ------------------------------------------
+
+                                // 3. --- FITUR PROGRESS BAR ---
+                                if (expectedFileSize > 0) {
+                                    // Hitung Persentase
+                                    int percentage = (int) ((totalBytesReceived * 100) / expectedFileSize);
+
+                                    // Format teks status (Contoh: "Downloading... 45%")
+                                    String statusText = String.format("Downloading... %d%%", percentage);
+
+                                    // Update GUI (Wajib pakai invokeLater)
+                                    SwingUtilities
+                                            .invokeLater(() -> gui.updateFileProgress(true, percentage, statusText));
+                                }
                             }
                         } catch (IOException e) {
-                            // Sembunyikan progress bar jika ada error
-                            SwingUtilities.invokeLater(() -> gui.updateFileProgress(false, 0, ""));
-                            SwingUtilities.invokeLater(
-                                    () -> gui.logMessage("ERROR: Gagal menulis chunk file: " + e.getMessage()));
+                            // Error Handling jika Harddisk penuh / error
+                            SwingUtilities.invokeLater(() -> {
+                                gui.logMessage("ERROR Write: " + e.getMessage());
+                                gui.updateFileProgress(false, 0, ""); // Matikan Progress Bar
+                            });
+
+                            // Tutup paksa stream jika error
                             try {
                                 if (currentFileWriter != null)
                                     currentFileWriter.close();
-                            } catch (IOException ignored) {
+                            } catch (IOException ex) {
                             }
-                            currentFileWriter = null;
+                            currentFileWriter = null; // Set null biar chunk berikutnya ditolak otomatis
                         }
                     }, "FileWriterThread").start();
+
+                } else {
+
                 }
                 break;
 
@@ -349,10 +383,10 @@ public class ClientService {
                             currentFileWriter.close();
                             gui.logMessage(String.format("✅ Penerimaan file '%s' selesai. Total %d bytes.",
                                     receivingFileName, totalBytesReceived));
-                            
+
                             // **FITUR PROGRESS BAR: Selesai Penerimaan**
                             gui.updateFileProgress(false, 100, "");
-                            
+
                             currentFileWriter = null;
                             receivingFileName = null;
                             expectedFileSize = 0;
@@ -373,7 +407,7 @@ public class ClientService {
     }
 
     // --- Penutupan Koneksi ---
-    
+
     /**
      * Menutup koneksi secara bersih.
      */
@@ -404,10 +438,10 @@ public class ClientService {
                 }
                 currentFileWriter = null;
             }
-            
+
             // **PROGRESS BAR: Sembunyikan saat disconnect**
             SwingUtilities.invokeLater(() -> gui.updateFileProgress(false, 0, ""));
-            
+
         } catch (IOException e) {
             SwingUtilities.invokeLater(() -> gui.logMessage("ERROR saat menutup koneksi: " + e.getMessage()));
         } finally {

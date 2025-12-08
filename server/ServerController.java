@@ -12,7 +12,7 @@ public class ServerController {
         onlineUsers.put(username, handler);
         System.out.println("[SERVER] User registered: " + username);
 
-        broadcastMessage("Server ", username + " has joined the chat.");
+        broadcastMessage("Server", username + " has joined the chat.");
 
         broadcastUserList();
     }
@@ -21,7 +21,7 @@ public class ServerController {
         if (onlineUsers.containsKey(username)) {
             onlineUsers.remove(username);
             System.out.println("[SERVER] user removed : " + username);
-            broadcastMessage("Server ", username + "has left the chat");
+            broadcastMessage("Server", username + "has left the chat");
 
             broadcastUserList();
         }
@@ -134,6 +134,23 @@ public class ServerController {
             if (targetClient != null) {
                 targetClient.sendMessage(msg);
                 System.out.println("[BUZZ] " + msg.getSender() + " --> " + target);
+            }
+        }
+    }
+
+    public static synchronized void relayTypingStatus(Message msg) {
+        String target = msg.getRecipient();
+
+        if ("ALL".equals(target)) {
+            for (ClientHandler client : onlineUsers.values()) {
+                if (!client.getUsername().equals(msg.getSender())) {
+                    client.sendMessage(msg);
+                }
+            }
+        } else {
+            ClientHandler targetClient = onlineUsers.get(target);
+            if (targetClient != null) {
+                targetClient.sendMessage(msg);
             }
         }
     }
