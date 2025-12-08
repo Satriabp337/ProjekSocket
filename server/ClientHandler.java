@@ -85,17 +85,7 @@ public class ClientHandler implements Runnable {
 
                     // 6. BUZZ (Fitur Getar)
                     case BUZZ:
-                        // Server hanya meneruskan (Forwarding) signal Buzz
-                        // Kalau targetnya ALL -> Broadcast
-                        // Kalau targetnya Nama -> Private
-                        String buzzTarget = msg.getRecipient();
-                        if ("ALL".equals(buzzTarget)) {
-                            // Untuk saat ini kita pakai broadcastMessage dulu atau bikin method khusus
-                            // Kita pakai broadcastMessage dengan konten khusus "BUZZ"
-                            ServerController.broadcastMessage(msg.getSender(), "BUZZ");
-                        } else {
-                            ServerController.sendPrivateMessage(msg.getSender(), buzzTarget, "BUZZ");
-                        }
+                        ServerController.relayBuzz(msg);
                         break;
                 }
             }

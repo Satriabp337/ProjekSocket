@@ -119,4 +119,23 @@ public class ServerController {
         System.out.println("[SYSTEM] Broadcasting User List : " + listString);
     }
 
+    public static synchronized void relayBuzz(Message msg) {
+        String target = msg.getRecipient();
+
+        if (target.equals("ALL")) {
+            for (ClientHandler client : onlineUsers.values()) {
+                if (!client.getUsername().equals(msg.getSender())) {
+                    client.sendMessage(msg);
+                }
+            }
+            System.out.println("{BUZZ] " + msg.getSender() + "Buzzed Everyone!");
+        } else {
+            ClientHandler targetClient = onlineUsers.get(target);
+            if (targetClient != null) {
+                targetClient.sendMessage(msg);
+                System.out.println("[BUZZ] " + msg.getSender() + " --> " + target);
+            }
+        }
+    }
+
 }
