@@ -24,7 +24,8 @@ public class ClientService {
     private ClientMain gui; // Referensi ke GUI utama untuk update
 
     // --- STATE MANAGEMENT UNTUK FILE RECEIVING ---
-    // Diubah menjadi volatile untuk penulisan antar-thread (Listener Thread vs File Writer Thread)
+    // Diubah menjadi volatile untuk penulisan antar-thread (Listener Thread vs File
+    // Writer Thread)
     private volatile FileOutputStream currentFileWriter;
     private String receivingFileName;
     private volatile long totalBytesReceived = 0;
@@ -46,17 +47,17 @@ public class ClientService {
             socket = new Socket(host, port);
             output = new ObjectOutputStream(socket.getOutputStream());
             // Flush header output-stream sebelum membuat input-stream (Penting!)
-            output.flush(); 
+            output.flush();
             input = new ObjectInputStream(socket.getInputStream());
-            
+
             // 2. Kirim pesan CONNECT sebagai handshake
             Message connectMsg = new Message(MessageType.CONNECT);
             connectMsg.setSender(username);
-            sendMessage(connectMsg); 
-            
+            sendMessage(connectMsg);
+
             // 3. Start Listener Thread (Penerima Pesan)
             new Thread(new ServerListener(), "ClientListenerThread").start();
-            
+
             return true;
 
         } catch (IOException e) {
@@ -82,18 +83,17 @@ public class ClientService {
             disconnect();
         }
     }
-    
+
     // Metode Helper untuk Chat Teks
     public void sendTextMessage(String recipient, String content) {
         Message msg = new Message(
-            recipient.equalsIgnoreCase("all") ? MessageType.BROADCAST_CHAT : MessageType.PRIVATE_CHAT
-        );
+                recipient.equalsIgnoreCase("all") ? MessageType.BROADCAST_CHAT : MessageType.PRIVATE_CHAT);
         msg.setRecipient(recipient);
         msg.setContent(content);
         msg.setSender(gui.getUsername()); // Set sender eksplisit
         sendMessage(msg);
     }
-    
+
     /**
      * Mengirim pesan BUZZ ke penerima tertentu.
      */
@@ -116,17 +116,17 @@ public class ClientService {
 
         new Thread(() -> {
             try (FileInputStream fis = new FileInputStream(file)) {
-                
+
                 // 1. Kirim Pesan Permintaan File (Header: FILE_REQUEST)
                 Message requestMsg = new Message(MessageType.FILE_REQUEST);
                 requestMsg.setRecipient(recipient);
-                requestMsg.setContent(file.getName()); 
+                requestMsg.setContent(file.getName());
                 requestMsg.setFileSize(file.length());
                 requestMsg.setSender(gui.getUsername());
                 sendMessage(requestMsg);
 
-                gui.logMessage(String.format("⏳ Mengirim file '%s' (%d bytes) ke %s...", 
-                    file.getName(), file.length(), recipient));
+                gui.logMessage(String.format("⏳ Mengirim file '%s' (%d bytes) ke %s...",
+                        file.getName(), file.length(), recipient));
 
                 byte[] buffer = new byte[8192]; // Ukuran buffer 8KB
                 int bytesRead;
@@ -135,11 +135,11 @@ public class ClientService {
                 while ((bytesRead = fis.read(buffer)) > 0) {
                     Message chunkMsg = new Message(MessageType.FILE_CHUNK);
                     chunkMsg.setRecipient(recipient);
-                    
+
                     byte[] data = new byte[bytesRead];
                     System.arraycopy(buffer, 0, data, 0, bytesRead);
                     chunkMsg.setFileChunk(data);
-                    
+
                     sendMessage(chunkMsg);
                 }
 
@@ -149,7 +149,7 @@ public class ClientService {
                 finishedMsg.setContent(file.getName());
                 finishedMsg.setSender(gui.getUsername());
                 sendMessage(finishedMsg);
-                
+
                 gui.logMessage("✅ Pengiriman file selesai.");
 
             } catch (Exception e) {
@@ -157,7 +157,6 @@ public class ClientService {
             }
         }, "ClientFileSenderThread").start();
     }
-
 
     // --- Penerima Pesan (ServerListener Thread) ---
 
@@ -173,15 +172,15 @@ public class ClientService {
                     }
                 }
             } catch (SocketException e) {
-                 if (!"Socket closed".equalsIgnoreCase(e.getMessage())) {
-                     SwingUtilities.invokeLater(() -> gui.connectionLost());
-                 }
+                if (!"Socket closed".equalsIgnoreCase(e.getMessage())) {
+                    SwingUtilities.invokeLater(() -> gui.connectionLost());
+                }
             } catch (IOException e) {
                 SwingUtilities.invokeLater(() -> gui.connectionLost());
             } catch (ClassNotFoundException e) {
                 SwingUtilities.invokeLater(() -> gui.logMessage("ERROR: Objek tak dikenal diterima."));
             } finally {
-                 disconnect(); 
+                disconnect();
             }
         }
     }
@@ -191,14 +190,18 @@ public class ClientService {
      */
     private void handleMessage(Message msg) {
         // Logika file writing (I/O intensif) harus dijalankan di thread terpisah.
-        // Logika GUI (perintah Swing) harus dijalankan di EDT (menggunakan invokeLater).
-        
+        // Logika GUI (perintah Swing) harus dijalankan di EDT (menggunakan
+        // invokeLater).
+
         switch (msg.getType()) {
             case BROADCAST_CHAT:
-                SwingUtilities.invokeLater(() -> gui.displayMessage(String.format("💬 [%s (BROADCAST)]: %s", msg.getSender(), msg.getContent())));
+                // Panggil method baru GUI yang mendukung Tab
+                SwingUtilities.invokeLater(() -> gui.incomingChat(msg.getSender(), msg.getContent(), false));
                 break;
+
             case PRIVATE_CHAT:
-                SwingUtilities.invokeLater(() -> gui.displayMessage(String.format("✉️ [%s (PRIVATE)]: %s", msg.getSender(), msg.getContent())));
+                // Panggil method baru GUI yang mendukung Tab
+                SwingUtilities.invokeLater(() -> gui.incomingChat(msg.getSender(), msg.getContent(), true));
                 break;
             case USER_LIST_UPDATE:
                 if (msg.getContent() != null && !msg.getContent().isEmpty()) {
@@ -206,7 +209,7 @@ public class ClientService {
                 }
                 break;
             case BUZZ:
-                SwingUtilities.invokeLater(() -> gui.triggerBuzz(msg.getSender())); 
+                SwingUtilities.invokeLater(() -> gui.triggerBuzz(msg.getSender()));
                 break;
             case DISCONNECT:
                 SwingUtilities.invokeLater(() -> {
@@ -214,7 +217,7 @@ public class ClientService {
                     disconnect();
                 });
                 break;
-                
+
             // --- FILE RECEIVER LOGIC ---
             case FILE_REQUEST:
                 SwingUtilities.invokeLater(() -> {
@@ -224,13 +227,14 @@ public class ClientService {
 
                     try {
                         File downloadDir = new File("downloads");
-                        if (!downloadDir.exists()) downloadDir.mkdir();
+                        if (!downloadDir.exists())
+                            downloadDir.mkdir();
                         File outputFile = new File(downloadDir, this.receivingFileName);
-                        
+
                         currentFileWriter = new FileOutputStream(outputFile);
-                        gui.logMessage(String.format("Menerima file '%s' (%d bytes) dari %s. Menyimpan ke: %s", 
-                            receivingFileName, expectedFileSize, msg.getSender(), outputFile.getAbsolutePath()));
-                        
+                        gui.logMessage(String.format("Menerima file '%s' (%d bytes) dari %s. Menyimpan ke: %s",
+                                receivingFileName, expectedFileSize, msg.getSender(), outputFile.getAbsolutePath()));
+
                     } catch (IOException e) {
                         gui.logMessage("ERROR: Gagal membuat file untuk penerimaan: " + e.getMessage());
                     }
@@ -238,10 +242,11 @@ public class ClientService {
                 break;
 
             case FILE_CHUNK:
-                // !! PERBAIKAN PENTING: Jalankan I/O disk (File Writer) di thread terpisah dari Listener Thread !!
+                // !! PERBAIKAN PENTING: Jalankan I/O disk (File Writer) di thread terpisah dari
+                // Listener Thread !!
                 if (currentFileWriter != null) {
                     // Start thread baru untuk menulis chunk ke disk
-                    new Thread(() -> { 
+                    new Thread(() -> {
                         try {
                             byte[] chunk = msg.getFileChunk();
                             if (chunk != null) {
@@ -251,8 +256,13 @@ public class ClientService {
                                 totalBytesReceived += chunk.length;
                             }
                         } catch (IOException e) {
-                            SwingUtilities.invokeLater(() -> gui.logMessage("ERROR: Gagal menulis chunk file: " + e.getMessage()));
-                            try { if (currentFileWriter != null) currentFileWriter.close(); } catch (IOException ignored) {}
+                            SwingUtilities.invokeLater(
+                                    () -> gui.logMessage("ERROR: Gagal menulis chunk file: " + e.getMessage()));
+                            try {
+                                if (currentFileWriter != null)
+                                    currentFileWriter.close();
+                            } catch (IOException ignored) {
+                            }
                             currentFileWriter = null;
                         }
                     }, "FileWriterThread").start();
@@ -264,8 +274,8 @@ public class ClientService {
                     if (currentFileWriter != null) {
                         try {
                             currentFileWriter.close();
-                            gui.logMessage(String.format("✅ Penerimaan file '%s' selesai. Total %d bytes.", 
-                                receivingFileName, totalBytesReceived));
+                            gui.logMessage(String.format("✅ Penerimaan file '%s' selesai. Total %d bytes.",
+                                    receivingFileName, totalBytesReceived));
                             currentFileWriter = null;
                             receivingFileName = null;
                             expectedFileSize = 0;
@@ -297,23 +307,30 @@ public class ClientService {
                 disconnectMsg.setSender(gui.getUsername());
                 try {
                     // Coba kirim sinyal DISCONNECT ke server
-                    output.writeObject(disconnectMsg); 
+                    output.writeObject(disconnectMsg);
                     output.flush();
-                } catch (Exception ignored) {} // Jika gagal kirim, mungkin socket sudah setengah tertutup
-                
-                if (input != null) input.close();
-                if (output != null) output.close();
-                if (socket != null) socket.close();
+                } catch (Exception ignored) {
+                } // Jika gagal kirim, mungkin socket sudah setengah tertutup
+
+                if (input != null)
+                    input.close();
+                if (output != null)
+                    output.close();
+                if (socket != null)
+                    socket.close();
             }
-             // Tutup file stream jika masih terbuka saat disconnect mendadak
+            // Tutup file stream jika masih terbuka saat disconnect mendadak
             if (currentFileWriter != null) {
-                try { currentFileWriter.close(); } catch (IOException ignored) {}
+                try {
+                    currentFileWriter.close();
+                } catch (IOException ignored) {
+                }
                 currentFileWriter = null;
             }
         } catch (IOException e) {
             SwingUtilities.invokeLater(() -> gui.logMessage("ERROR saat menutup koneksi: " + e.getMessage()));
         } finally {
-             SwingUtilities.invokeLater(() -> gui.connectionClosed());
+            SwingUtilities.invokeLater(() -> gui.connectionClosed());
         }
     }
 }
