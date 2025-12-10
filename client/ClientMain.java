@@ -25,7 +25,7 @@ public class ClientMain extends JFrame {
     // **FITUR BARU: STATE UNTUK TYPING INDICATOR**
     private HashMap<String, JLabel> typingIndicators = new HashMap<>();
     private Timer typingTimer;
-    private static final int TYPING_DELAY_MS = 2000; // 2 detik
+    private static final int TYPING_DELAY_MS = 5000;
     // ------------------------------------------
 
     // --- Komponen GUI ---

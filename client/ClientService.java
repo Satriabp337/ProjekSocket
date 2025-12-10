@@ -323,56 +323,36 @@ public class ClientService {
                 break;
 
             case FILE_CHUNK:
-                // Cek: Apakah Keran Penyimpanan (currentFileWriter) terbuka?
+                // --- PERBAIKAN: HAPUS "new Thread", Tulis Langsung (Synchronous) ---
                 if (currentFileWriter != null) {
+                    try {
+                        byte[] chunk = msg.getFileChunk();
+                        if (chunk != null) {
+                            // 1. Tulis Langsung (Dijamin Urut karena satu thread)
+                            currentFileWriter.write(chunk);
 
-                    // Ambil data potongan file dari pesan
-                    byte[] chunk = msg.getFileChunk();
+                            // 2. Update Counter
+                            totalBytesReceived += chunk.length;
 
-                    // tidak macet menunggu Harddisk menulis data.
-                    new Thread(() -> {
-                        try {
-                            if (chunk != null) {
-                                // 1. Tulis Byte ke Harddisk (I/O Operation)
-                                currentFileWriter.write(chunk);
-
-                                // 2. Update Counter Total Byte
-                                synchronized (this) {
-                                    totalBytesReceived += chunk.length;
-                                }
-
-                                // 3. --- FITUR PROGRESS BAR ---
-                                if (expectedFileSize > 0) {
-                                    // Hitung Persentase
-                                    int percentage = (int) ((totalBytesReceived * 100) / expectedFileSize);
-
-                                    // Format teks status (Contoh: "Downloading... 45%")
-                                    String statusText = String.format("Downloading... %d%%", percentage);
-
-                                    // Update GUI (Wajib pakai invokeLater)
-                                    SwingUtilities
-                                            .invokeLater(() -> gui.updateFileProgress(true, percentage, statusText));
-                                }
+                            // 3. Update Progress Bar (Tetap pakai invokeLater buat GUI)
+                            if (expectedFileSize > 0) {
+                                int percentage = (int) ((totalBytesReceived * 100) / expectedFileSize);
+                                String statusText = String.format("Downloading... %d%%", percentage);
+                                SwingUtilities.invokeLater(() -> gui.updateFileProgress(true, percentage, statusText));
                             }
-                        } catch (IOException e) {
-                            // Error Handling jika Harddisk penuh / error
-                            SwingUtilities.invokeLater(() -> {
-                                gui.logMessage("ERROR Write: " + e.getMessage());
-                                gui.updateFileProgress(false, 0, ""); // Matikan Progress Bar
-                            });
-
-                            // Tutup paksa stream jika error
-                            try {
-                                if (currentFileWriter != null)
-                                    currentFileWriter.close();
-                            } catch (IOException ex) {
-                            }
-                            currentFileWriter = null; // Set null biar chunk berikutnya ditolak otomatis
                         }
-                    }, "FileWriterThread").start();
-
-                } else {
-
+                    } catch (IOException e) {
+                        SwingUtilities.invokeLater(() -> {
+                            gui.logMessage("ERROR Write: " + e.getMessage());
+                            gui.updateFileProgress(false, 0, "");
+                        });
+                        try {
+                            if (currentFileWriter != null)
+                                currentFileWriter.close();
+                        } catch (IOException ex) {
+                        }
+                        currentFileWriter = null;
+                    }
                 }
                 break;
 
