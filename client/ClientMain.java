@@ -499,11 +499,27 @@ public class ClientMain extends JFrame {
     }
 
     private void showConnectDialog() {
-        String usernameInput = JOptionPane.showInputDialog(this, "Masukkan Username:", "Login",
-                JOptionPane.PLAIN_MESSAGE);
-        if (usernameInput != null && !usernameInput.trim().isEmpty()) {
-            this.currentUsername = usernameInput.trim();
-            onConnectButtonClick("localhost", 50125, this.currentUsername);
+        // Panel untuk menampung 2 inputan (Username & IP)
+        JPanel panel = new JPanel(new GridLayout(2, 2));
+        JTextField userField = new JTextField();
+        JTextField ipField = new JTextField("localhost"); // Default localhost, tapi bisa diedit
+
+        panel.add(new JLabel("Username:"));
+        panel.add(userField);
+        panel.add(new JLabel("Server IP:"));
+        panel.add(ipField);
+
+        int result = JOptionPane.showConfirmDialog(this, panel, "Login SecureLAN", JOptionPane.OK_CANCEL_OPTION);
+
+        if (result == JOptionPane.OK_OPTION) {
+            String user = userField.getText().trim();
+            String ip = ipField.getText().trim();
+
+            if (!user.isEmpty() && !ip.isEmpty()) {
+                this.currentUsername = user;
+                // Gunakan IP yang diinput user, bukan "localhost" lagi
+                onConnectButtonClick(ip, 50125, this.currentUsername);
+            }
         }
     }
 
