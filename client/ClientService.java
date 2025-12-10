@@ -282,7 +282,6 @@ public class ClientService {
 
             // --- FILE RECEIVER LOGIC ---
             case FILE_REQUEST:
-                // 1. Ambil Info File
                 String sender = msg.getSender();
                 String fileName = msg.getContent();
                 long size = msg.getFileSize();
@@ -291,8 +290,6 @@ public class ClientService {
                 this.expectedFileSize = size;
                 this.totalBytesReceived = 0;
 
-                // 2. LANGSUNG BUKA STREAM KE FILE SEMENTARA (.part)
-                // Jangan tunggu user klik Yes/No, keburu datanya lewat!
                 try {
                     File downloadDir = new File("downloads");
                     if (!downloadDir.exists())
@@ -302,8 +299,6 @@ public class ClientService {
                     File tempFile = new File(downloadDir, fileName + ".part");
                     currentFileWriter = new FileOutputStream(tempFile);
 
-                    // 3. Tampilkan Dialog Konfirmasi (Non-Blocking / Async)
-                    // Gunakan Thread terpisah agar tidak mengganggu aliran data masuk
                     SwingUtilities.invokeLater(() -> {
                         int choice = javax.swing.JOptionPane.showConfirmDialog(gui,
                                 "Terima file '" + fileName + "' (" + (size / 1024) + " KB) dari " + sender + "?",
@@ -313,13 +308,16 @@ public class ClientService {
                         if (choice != javax.swing.JOptionPane.YES_OPTION) {
                             // JIKA USER MENOLAK:
                             try {
-                                // Tutup keran
                                 if (currentFileWriter != null)
                                     currentFileWriter.close();
                                 currentFileWriter = null;
-                                // Hapus file .part yang sudah terlanjur ditulis
                                 tempFile.delete();
                                 gui.logMessage("❌ File ditolak & dihapus.");
+
+                                // --- FITUR PERBAIKAN: HILANGKAN PROGRESS BAR ---
+                                gui.updateFileProgress(false, 0, "");
+                                // -----------------------------------------------
+
                             } catch (Exception e) {
                             }
                         } else {
@@ -368,35 +366,34 @@ public class ClientService {
 
             case FILE_COMPLETE:
                 SwingUtilities.invokeLater(() -> {
+                    // JIKA DITOLAK (currentFileWriter == null), TETAP MATIKAN PROGRESS BAR
+                    if (currentFileWriter == null) {
+                        gui.updateFileProgress(false, 0, "");
+                        return;
+                    }
+
+                    // JIKA DITERIMA
                     if (currentFileWriter != null) {
                         try {
                             currentFileWriter.close();
-                            
-                            // PROSES RENAME (.part -> Asli)
+
+                            // ... (kode rename file .part yang lama) ...
                             File downloadDir = new File("downloads");
                             File tempFile = new File(downloadDir, receivingFileName + ".part");
                             File finalFile = new File(downloadDir, receivingFileName);
-                            
-                            // Hapus file lama jika ada (overwrite)
-                            if (finalFile.exists()) finalFile.delete();
-                            
-                            boolean success = tempFile.renameTo(finalFile);
-                            
-                            if (success) {
-                                gui.logMessage("✅ File tersimpan: " + receivingFileName);
-                            } else {
-                                gui.logMessage("⚠️ Gagal rename file .part, cek folder downloads.");
-                            }
+                            if (finalFile.exists())
+                                finalFile.delete();
+                            tempFile.renameTo(finalFile);
 
-                            // Update UI Selesai
+                            gui.logMessage("✅ File tersimpan: " + receivingFileName);
+
+                            // Matikan Progress Bar (Sukses)
                             gui.updateFileProgress(false, 100, "");
-                            
-                            // Reset
+
                             currentFileWriter = null;
                             receivingFileName = null;
                             expectedFileSize = 0;
                             totalBytesReceived = 0;
-                            
                         } catch (IOException e) {
                             gui.logMessage("ERROR Finalizing: " + e.getMessage());
                         }
