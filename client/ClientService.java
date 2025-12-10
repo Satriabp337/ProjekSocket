@@ -282,44 +282,54 @@ public class ClientService {
 
             // --- FILE RECEIVER LOGIC ---
             case FILE_REQUEST:
+                // 1. Ambil Info File
+                String sender = msg.getSender();
+                String fileName = msg.getContent();
+                long size = msg.getFileSize();
 
-                SwingUtilities.invokeLater(() -> {
-                    String sender = msg.getSender();
-                    String fileName = msg.getContent();
-                    long size = msg.getFileSize();
+                this.receivingFileName = fileName;
+                this.expectedFileSize = size;
+                this.totalBytesReceived = 0;
 
-                    // Tampilkan Popup Konfirmasi
-                    int choice = javax.swing.JOptionPane.showConfirmDialog(gui,
-                            "Terima file '" + fileName + "' (" + (size / 1024) + " KB) dari " + sender + "?",
-                            "File Masuk",
-                            javax.swing.JOptionPane.YES_NO_OPTION);
+                // 2. LANGSUNG BUKA STREAM KE FILE SEMENTARA (.part)
+                // Jangan tunggu user klik Yes/No, keburu datanya lewat!
+                try {
+                    File downloadDir = new File("downloads");
+                    if (!downloadDir.exists())
+                        downloadDir.mkdir();
 
-                    if (choice == javax.swing.JOptionPane.YES_OPTION) {
-                        // USER MAU DOWNLOAD
-                        this.receivingFileName = fileName;
-                        this.expectedFileSize = size;
-                        this.totalBytesReceived = 0;
+                    // Simpan sebagai .part dulu
+                    File tempFile = new File(downloadDir, fileName + ".part");
+                    currentFileWriter = new FileOutputStream(tempFile);
 
-                        try {
-                            File downloadDir = new File("downloads");
-                            if (!downloadDir.exists())
-                                downloadDir.mkdir();
-                            File outputFile = new File(downloadDir, this.receivingFileName);
+                    // 3. Tampilkan Dialog Konfirmasi (Non-Blocking / Async)
+                    // Gunakan Thread terpisah agar tidak mengganggu aliran data masuk
+                    SwingUtilities.invokeLater(() -> {
+                        int choice = javax.swing.JOptionPane.showConfirmDialog(gui,
+                                "Terima file '" + fileName + "' (" + (size / 1024) + " KB) dari " + sender + "?",
+                                "File Masuk",
+                                javax.swing.JOptionPane.YES_NO_OPTION);
 
-                            // BUKA KERAN PENYIMPANAN
-                            currentFileWriter = new FileOutputStream(outputFile);
-                            gui.logMessage("Menerima file: " + fileName);
-
-                        } catch (IOException e) {
-                            gui.logMessage("ERROR membuat file: " + e.getMessage());
-                            currentFileWriter = null; // Gagal, jadi null
+                        if (choice != javax.swing.JOptionPane.YES_OPTION) {
+                            // JIKA USER MENOLAK:
+                            try {
+                                // Tutup keran
+                                if (currentFileWriter != null)
+                                    currentFileWriter.close();
+                                currentFileWriter = null;
+                                // Hapus file .part yang sudah terlanjur ditulis
+                                tempFile.delete();
+                                gui.logMessage("❌ File ditolak & dihapus.");
+                            } catch (Exception e) {
+                            }
+                        } else {
+                            gui.logMessage("Menerima file...");
                         }
-                    } else {
-                        // USER MENOLAK
-                        gui.logMessage("Menolak file dari " + sender);
-                        currentFileWriter = null; // KUNCI UTAMA: Set null biar chunk dibuang
-                    }
-                });
+                    });
+
+                } catch (IOException e) {
+                    gui.logMessage("ERROR Init File: " + e.getMessage());
+                }
                 break;
 
             case FILE_CHUNK:
@@ -361,18 +371,34 @@ public class ClientService {
                     if (currentFileWriter != null) {
                         try {
                             currentFileWriter.close();
-                            gui.logMessage(String.format("✅ Penerimaan file '%s' selesai. Total %d bytes.",
-                                    receivingFileName, totalBytesReceived));
+                            
+                            // PROSES RENAME (.part -> Asli)
+                            File downloadDir = new File("downloads");
+                            File tempFile = new File(downloadDir, receivingFileName + ".part");
+                            File finalFile = new File(downloadDir, receivingFileName);
+                            
+                            // Hapus file lama jika ada (overwrite)
+                            if (finalFile.exists()) finalFile.delete();
+                            
+                            boolean success = tempFile.renameTo(finalFile);
+                            
+                            if (success) {
+                                gui.logMessage("✅ File tersimpan: " + receivingFileName);
+                            } else {
+                                gui.logMessage("⚠️ Gagal rename file .part, cek folder downloads.");
+                            }
 
-                            // **FITUR PROGRESS BAR: Selesai Penerimaan**
+                            // Update UI Selesai
                             gui.updateFileProgress(false, 100, "");
-
+                            
+                            // Reset
                             currentFileWriter = null;
                             receivingFileName = null;
                             expectedFileSize = 0;
                             totalBytesReceived = 0;
+                            
                         } catch (IOException e) {
-                            gui.logMessage("ERROR saat menutup file stream: " + e.getMessage());
+                            gui.logMessage("ERROR Finalizing: " + e.getMessage());
                         }
                     }
                 });
